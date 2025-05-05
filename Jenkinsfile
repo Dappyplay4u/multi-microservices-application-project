@@ -14,23 +14,23 @@ pipeline {
         gradle 'Gradle'
     }
     stages {
-        // // SonarQube SAST Code Analysis
-        // stage('SonarQube Inspection') {
-        //     steps {
-        //         sh 'gradle sonarqube'
-        //     }
-        // }
-        // stage("SonarQube SAST Analysis"){
-        //     steps{
-        //         withSonarQubeEnv('Sonar-Server') {
-        //             sh ''' 
-        //             $SCANNER_HOME/bin/sonar-scanner \
-        //             -Dsonar.projectName=app-ad-serverice \
-        //             -Dsonar.projectKey=app-ad-serverice '''
-        //         }
-        //     }
-        // }
-        // Providing Snyk Access
+        // SonarQube SAST Code Analysis
+        stage('SonarQube Inspection') {
+            steps {
+                sh 'gradle sonarqube'
+            }
+        }
+        stage("SonarQube SAST Analysis"){
+            steps{
+                withSonarQubeEnv('Sonar-Server') {
+                    sh ''' 
+                    $SCANNER_HOME/bin/sonar-scanner \
+                    -Dsonar.projectName=app-ad-serverice \
+                    -Dsonar.projectKey=app-ad-serverice '''
+                }
+            }
+        }
+        Providing Snyk Access
         stage('Authenticate & Authorize Snyk') {
             steps {
                 withCredentials([string(credentialsId: 'Snyk-API-Token', variable: 'SNYK_TOKEN')]) {
@@ -81,23 +81,23 @@ pipeline {
                 }
             }
         }
-        // // Production Deployment Approval
-        // stage('Approve Prod Deployment') {
-        //     steps {
-        //             input('Do you want to proceed?')
-        //     }
-        // }
-        // // // Deploy to The Production Environment
-        // stage('Deploy Microservice To The Prod Env'){
-        //     steps{
-        //         script{
-        //             withKubeConfig(caCertificate: '', clusterName: '', contextName: '', credentialsId: 'Kubernetes-Credential', namespace: '', restrictKubeConfigAccess: false, serverUrl: '') {
-        //                sh 'kubectl apply -f deploy-envs/prod-env/deployment.yaml'
-        //                sh 'kubectl apply -f deploy-envs/prod-env/service.yaml'  //ClusterIP Service
-        //             }
-        //         }
-        //     }
-        // }
+        // Production Deployment Approval
+        stage('Approve Prod Deployment') {
+            steps {
+                    input('Do you want to proceed?')
+            }
+        }
+        // // Deploy to The Production Environment
+        stage('Deploy Microservice To The Prod Env'){
+            steps{
+                script{
+                    withKubeConfig(caCertificate: '', clusterName: '', contextName: '', credentialsId: 'Kubernetes-Credential', namespace: '', restrictKubeConfigAccess: false, serverUrl: '') {
+                       sh 'kubectl apply -f deploy-envs/prod-env/deployment.yaml'
+                       sh 'kubectl apply -f deploy-envs/prod-env/service.yaml'  //ClusterIP Service
+                    }
+                }
+            }
+        }
     }
     post {
     always {
