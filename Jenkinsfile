@@ -3,25 +3,32 @@ def COLOR_MAP = [
     'FAILURE': 'danger',
     'UNSTABLE': 'danger'
 ]
+
 pipeline {
     agent any
+
     environment {
-        SCANNER_HOME=tool 'SonarScanner'
-        SNYK_HOME   = tool name: 'Snyk'
+        SCANNER_HOME = tool 'SonarScanner'
+        SNYK_HOME    = tool name: 'Snyk'
+        AWS_DEFAULT_REGION = 'us-west-2'
     }
+
     tools {
         snyk 'Snyk'
     }
+
     stages {
         // SonarQube SAST Code Analysis
-        stage("SonarQube SAST Analysis"){
-            steps{
+        stage("SonarQube SAST Analysis") {
+            steps {
                 withSonarQubeEnv('Sonar-Server') {
-                    sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=app-email-service \
-                    -Dsonar.projectKey=app-email-service '''
+                    sh ''' $SCANNER_HOME/bin/sonar-scanner \
+                        -Dsonar.projectName=app-email-service \
+                        -Dsonar.projectKey=app-email-service '''
                 }
             }
         }
+
         // Providing Snyk Access
         stage('Authenticate & Authorize Snyk') {
             steps {
@@ -30,12 +37,14 @@ pipeline {
                 }
             }
         }
+
         // Scan Service Dockerfile With Open Policy Agent (OPA)
         stage('OPA Dockerfile Vulnerability Scan') {
             steps {
                 sh "docker run --rm -v ${WORKSPACE}:/project openpolicyagent/conftest test --policy docker-opa-security.rego Dockerfile || true"
             }
         }
+
         // Build and Tag Service Docker Image
         stage('Build & Tag Microservice Docker Image') {
             steps {
@@ -46,57 +55,78 @@ pipeline {
                 }
             }
         }
+
         // Execute SCA/Dependency Test on Service Docker Image
         stage('Snyk SCA Test | Dependencies') {
             steps {
-                sh "${SNYK_HOME}/snyk-linux test --docker dappyplay4u/emailservice:latest || true" 
+                sh "${SNYK_HOME}/snyk-linux test --docker dappyplay4u/emailservice:latest || true"
             }
         }
+
         // Push Service Image to DockerHub
         stage('Push Microservice Docker Image') {
             steps {
                 script {
                     withDockerRegistry(credentialsId: 'DockerHub-Credential', toolName: 'docker') {
-                        sh "docker push dappyplay4u/emailservice:latest "
+                        sh "docker push dappyplay4u/emailservice:latest"
                     }
                 }
             }
         }
-        // Deploy to The Staging/Test Environment
-        stage('Deploy Microservice To The Stage/Test Env'){
-            steps{
-                script{
-                    withKubeConfig(caCertificate: '', clusterName: '', contextName: '', credentialsId: 'Kubernetes-Credential', namespace: '', restrictKubeConfigAccess: false, serverUrl: '') {
-                       sh 'kubectl apply -f deploy-envs/test-env/deployment.yaml'
-                       sh 'kubectl apply -f deploy-envs/test-env/service.yaml'  //ClusterIP Service
-                   }
+
+        // Configure AWS CLI before deployment
+        stage('Configure AWS CLI') {
+            steps {
+                script {
+                    withCredentials([usernamePassword(credentialsId: 'aws-credentials', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+                        sh '''
+                            aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+                            aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+                            aws configure set region $AWS_DEFAULT_REGION
+                        '''
+                    }
                 }
             }
         }
+
+        // Deploy to The Staging/Test Environment
+        stage('Deploy Microservice To The Stage/Test Env') {
+            steps {
+                script {
+                    withKubeConfig(caCertificate: '', clusterName: '', contextName: '', credentialsId: 'Kubernetes-Credential', namespace: '', restrictKubeConfigAccess: false, serverUrl: '') {
+                        sh 'kubectl apply -f deploy-envs/test-env/deployment.yaml'
+                        sh 'kubectl apply -f deploy-envs/test-env/service.yaml'  //ClusterIP Service
+                    }
+                }
+            }
+        }
+
         // Production Deployment Approval
         stage('Approve Prod Deployment') {
             steps {
-                    input('Do you want to proceed?')
+                input('Do you want to proceed?')
             }
         }
-        // // Deploy to The Production Environment
-        stage('Deploy Microservice To The Prod Env'){
-            steps{
-                script{
+
+        // Deploy to The Production Environment
+        stage('Deploy Microservice To The Prod Env') {
+            steps {
+                script {
                     withKubeConfig(caCertificate: '', clusterName: '', contextName: '', credentialsId: 'Kubernetes-Credential', namespace: '', restrictKubeConfigAccess: false, serverUrl: '') {
-                       sh 'kubectl apply -f deploy-envs/prod-env/deployment.yaml'
-                       sh 'kubectl apply -f deploy-envs/prod-env/service.yaml'  //ClusterIP Service
+                        sh 'kubectl apply -f deploy-envs/prod-env/deployment.yaml'
+                        sh 'kubectl apply -f deploy-envs/prod-env/service.yaml'  //ClusterIP Service
                     }
                 }
             }
         }
     }
+
     post {
-    always {
-        echo 'Slack Notifications.'
-        slackSend channel: '#all-minecraftapp', //update and provide your channel name
-        color: COLOR_MAP[currentBuild.currentResult],
-        message: "*${currentBuild.currentResult}:* Job Name '${env.JOB_NAME}' build ${env.BUILD_NUMBER} \n Build Timestamp: ${env.BUILD_TIMESTAMP} \n Project Workspace: ${env.WORKSPACE} \n More info at: ${env.BUILD_URL}"
+        always {
+            echo 'Slack Notifications.'
+            slackSend channel: '#all-minecraftapp',
+            color: COLOR_MAP[currentBuild.currentResult],
+            message: "*${currentBuild.currentResult}:* Job Name '${env.JOB_NAME}' build ${env.BUILD_NUMBER} \n Build Timestamp: ${env.BUILD_TIMESTAMP} \n Project Workspace: ${env.WORKSPACE} \n More info at: ${env.BUILD_URL}"
+        }
     }
-  }
 }
