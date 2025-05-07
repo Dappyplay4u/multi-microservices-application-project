@@ -17,7 +17,7 @@ And Push the Code based on the Microservice to the specific Branch you Created f
 ### Pipeline creation (Make Sure To Make The Following Updates First)
 - UPDATE YOUR ``Jenkinsfiles...``
 
-- Update your `Frontend Service` - `OWASP Zap Server IP` and `EKS Worker Node IP` in the `Jenkinsfile` on `Line 80`
+- Update your `Frontend Service` - `OWASP Zap Server IP` and `EKS Worker Node IP` in the `Jenkinsfile` on `Line 100`
   - `NOTE` to update the `Frontend Service`, you must `Switch` to the `Frontend Branch`
 - Update the `EKS Worker Node IP` with yours in the `Jenkinsfile` on `Line 100`
 <!-- sh 'ssh -o StrictHostKeyChecking=no ubuntu@35.90.100.75 "docker run -t zaproxy/zap-weekly zap-baseline.py -t http://44.244.36.98:30000/" || true' -->
