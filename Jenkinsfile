@@ -8,6 +8,7 @@ pipeline {
     environment {
         SCANNER_HOME=tool 'SonarScanner'
         SNYK_HOME   = tool name: 'Snyk'
+        AWS_DEFAULT_REGION = 'us-west-2'
     }
     tools {
         snyk 'Snyk'
@@ -62,6 +63,22 @@ pipeline {
                 }
             }
         }
+
+        // Configure AWS CLI before deployment
+        stage('Configure AWS CLI') {
+            steps {
+                script {
+                    withCredentials([usernamePassword(credentialsId: 'aws-credentials', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+                        sh '''
+                            aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+                            aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+                            aws configure set region $AWS_DEFAULT_REGION
+                        '''
+                    }
+                }
+            }
+        }
+
         // Deploy to The Staging/Test Environment
         stage('Deploy Microservice To The Stage/Test Env'){
             steps{
@@ -73,13 +90,14 @@ pipeline {
                 }
             }
         }
+
         // Production Deployment Approval
         stage('Approve Prod Deployment') {
             steps {
-                    input('Do you want to proceed?')
+                input('Do you want to proceed?')
             }
         }
-        // // Deploy to The Production Environment
+        // Deploy to The Production Environment
         stage('Deploy Microservice To The Prod Env'){
             steps{
                 script{
@@ -92,11 +110,11 @@ pipeline {
         }
     }
     post {
-    always {
-        echo 'Slack Notifications.'
-        slackSend channel: '#all-minecraftapp', //update and provide your channel name
-        color: COLOR_MAP[currentBuild.currentResult],
-        message: "*${currentBuild.currentResult}:* Job Name '${env.JOB_NAME}' build ${env.BUILD_NUMBER} \n Build Timestamp: ${env.BUILD_TIMESTAMP} \n Project Workspace: ${env.WORKSPACE} \n More info at: ${env.BUILD_URL}"
+        always {
+            echo 'Slack Notifications.'
+            slackSend channel: '#all-minecraftapp', //update and provide your channel name
+            color: COLOR_MAP[currentBuild.currentResult],
+            message: "*${currentBuild.currentResult}:* Job Name '${env.JOB_NAME}' build ${env.BUILD_NUMBER} \n Build Timestamp: ${env.BUILD_TIMESTAMP} \n Project Workspace: ${env.WORKSPACE} \n More info at: ${env.BUILD_URL}"
+        }
     }
-  }
 }
