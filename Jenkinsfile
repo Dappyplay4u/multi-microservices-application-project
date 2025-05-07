@@ -8,11 +8,12 @@ pipeline {
     environment {
         SCANNER_HOME=tool 'SonarScanner'
         SNYK_HOME   = tool name: 'Snyk'
+        AWS_DEFAULT_REGION = 'us-west-2'
     }
     tools {
         snyk 'Snyk'
     }
-    stages {
+
         // SonarQube SAST Code Analysis
         stage("SonarQube SAST Analysis"){
             steps{
@@ -62,11 +63,27 @@ pipeline {
                 }
             }
         }
+        // configure aws env
+        stage('Deploy Microservice To The Stage/Test Env'){
+            steps{
+                script{
+                    withCredentials([usernamePassword(credentialsId: 'aws-credentials', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+                sh '''
+                    aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+                    aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+                    aws configure set region $AWS_DEFAULT_REGION
+                '''
+                   }
+                }
+            }
+        }
+        
         // Deploy to The Staging/Test Environment
         stage('Deploy Microservice To The Stage/Test Env'){
             steps{
                 script{
                     withKubeConfig(caCertificate: '', clusterName: '', contextName: '', credentialsId: 'Kubernetes-Credential', namespace: '', restrictKubeConfigAccess: false, serverUrl: '') {
+                       sh 'aws eks update-kubeconfig --name minecraft-eks-cluster --region us-west-2'
                        sh 'kubectl apply -f deploy-envs/test-env/deployment.yaml --validate=false'
                        sh 'kubectl apply -f deploy-envs/test-env/nodeport-service.yaml --validate=false'  //NodePort Service
                    }
@@ -93,7 +110,6 @@ pipeline {
             steps{
                 script{
                     withKubeConfig(caCertificate: '', clusterName: '', contextName: '', credentialsId: 'Kubernetes-Credential', namespace: '', restrictKubeConfigAccess: false, serverUrl: '') {
-                       sh 'aws eks update-kubeconfig --name minecraft-eks-cluster --region us-west-2'
                        sh 'kubectl apply -f deploy-envs/prod-env/deployment.yaml'
                        sh 'kubectl apply -f deploy-envs/prod-env/loadbalancer-service.yaml'  //LoadBalancer Service
                     }
